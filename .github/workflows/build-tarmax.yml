@@ -1,0 +1,60 @@
+name: Build Tarmax
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+  workflow_dispatch:  # Чтобы запускать вручную
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+      
+      - name: Change package name to tarmax
+        run: |
+          # Меняем все вхождения Termux на Tarmax
+          find ./app -type f -name "*.gradle" -exec sed -i 's/com.termux/com.tarmax/g' {} \;
+          find ./app/src -type f -name "*.java" -exec sed -i 's/Termux/Tarmax/g' {} \;
+          find ./app/src -type f -name "*.kt" -exec sed -i 's/Termux/Tarmax/g' {} \;
+          find ./app/src -type f -name "*.xml" -exec sed -i 's/Termux/Tarmax/g' {} \;
+          
+          # Приветствие
+          sed -i 's/Welcome to Termux/Welcome to Tarmax/g' app/src/main/java/com/termux/app/TermuxActivity.java
+      
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      
+      - name: Rename APK
+        run: |
+          mv app/build/outputs/apk/debug/app-debug.apk tarmax-latest.apk
+          mv app/build/outputs/apk/debug/app-debug.apk tarmax-${{ github.run_number }}.apk
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarmax-apk
+          path: tarmax-*.apk
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: tarmax-*.apk
+          name: Tarmax ${{ github.ref_name }}
+          body: |
+            ✅ Автоматическая сборка Tarmax
+            🔥 Исправлены лаги оригинального Termux
+            📦 Установка: `adb install tarmax-${{ github.run_number }}.apk`
